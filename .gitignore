@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual Environment
+.venv/
+venv/
+
+# Environment variables
+.env
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+
+# Docker
+*.tar
+
+# LangGraph checkpoints
+checkpoints/
+
+# Temporary files
+temp/
