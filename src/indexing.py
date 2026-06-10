@@ -9,7 +9,6 @@ import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from langchain_qdrant import QdrantVectorStore
-import fitz
 import io, csv
 from docx import Document
 from langchain_community.document_loaders import GCSFileLoader, PyPDFLoader, CSVLoader
