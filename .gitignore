@@ -34,3 +34,4 @@ checkpoints/
 
 # Temporary files
 temp/
+.venv

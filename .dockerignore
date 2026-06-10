@@ -1,0 +1,6 @@
+.env                  ← never ship API keys in container
+docker-compose.yml
+__pycache__
+*.pyc
+.git
+.venv

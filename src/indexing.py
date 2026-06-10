@@ -9,15 +9,33 @@ import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from langchain_qdrant import QdrantVectorStore
+import fitz
+import io, csv
+from docx import Document
+from langchain_community.document_loaders import GCSFileLoader, PyPDFLoader, CSVLoader
 
+'''
+Leasons Learnt:
+- During qdrant cloud update I need to pass the url & api key in langchain vectorstore call.
+- The embedding took a long time, so i need to add a retry in the embedding node to overcome the timeout error max retries 3
+- '''
 
-load_dotenv()
+# load_dotenv()
+
+bucket_name = os.environ.get("GCS_BUCKET_NAME")
+project_id  = os.environ.get("GCP_PROJECT_ID")
+LOADER_MAP = {
+        "PDF":  PyPDFLoader,
+        "CSV":  CSVLoader,
+        "Text": TextLoader,
+        "Word": Docx2txtLoader,
+    }
 
 # Langgraph Graph  design
 
 # defind the states 
 class IndexingState(TypedDict):
-     path : str
+     bucket_name : str
      categotize_files : str
      load_files : str
      chunking_docs : str
@@ -45,8 +63,8 @@ class IndexingState(TypedDict):
 # define nodes
 def node_categorize_file(state:IndexingState):
     data_source = DataSource()
-    #categorized_files = data_source.scan_folder(state["path"])
-    data_source.scan_folder(state["path"])
+    #categorized_files = data_source.scan_folder(state["bucket_name"])
+    data_source.categorize_file(state["bucket_name"])
     for category, files in data_source.categorized_files.items():
         print(f"\n--- {category} ---")
         if category == 'PDF':
@@ -63,35 +81,32 @@ def node_load_file(state: IndexingState):
     csv_load_doc = []
     text_load_doc = []
     word_load_doc = []
+    # gcs folder structure - gs://ranjith-rag-indexing-bucket-1/DFSORT (2).pdf
     for category, files in temp_categorized_files.items():
+        
         if category == 'PDF':
             for file in files:
-                    pdf_loader =  PyPDFLoader(file,mode='page')
-                    pdf_load = pdf_loader.load()
-                    pdf_load_doc.extend(pdf_load)
+                    docs = GCS_loader(file, category)
+                    pdf_load_doc.extend(docs)
             print(f'Number of PDF documents loaded --> {len(pdf_load_doc)}')
 
         if category == 'CSV':
             for file in files:
-                  csv_loader = CSVLoader(file)
-                  csv_load = csv_loader.load()
-                  csv_load_doc.extend(csv_load)
+                  docs = GCS_loader(file, category)
+                  csv_load_doc.extend(docs)
             print(f'Number of CSV documents loaded --> {len(csv_load_doc)}')
 
         if category == 'Text':
             for file in files:
-                  text_loader = TextLoader(file)
-                  text_load = text_loader.load()
-                  text_load_doc.extend(text_load)
+                docs = GCS_loader(file, category)
+                text_load_doc.extend(docs)
             print(f'Number of Text documents loaded --> {len(text_load_doc)}')
 
 
         if category == 'Word':
             for file in files:
-                
-                word_loader = Docx2txtLoader(file)
-                word_load = word_loader.load()
-                word_load_doc.extend(word_load)
+                docs = GCS_loader(file, category)
+                word_load_doc.extend(docs)
             print(f'Number of Word documents loaded --> {len(word_load_doc)}')  
     return {
         "load_doc_status" : "Yes",
@@ -104,6 +119,15 @@ def node_load_file(state: IndexingState):
         'load_txt_doc' : text_load_doc,
         'load_files' : "Yes"   
             }        
+
+def GCS_loader(file, category, ):
+     loader = GCSFileLoader.load(project_name=project_id,
+                            bucket=bucket_name,
+                            blob=file,
+                            loader_func=LOADER_MAP[category] )
+     docs = loader.load()
+     return docs
+
 
 def node_chuncking_textsplitter_doc(state: IndexingState):
 
@@ -142,15 +166,21 @@ def node_db_connection_vectore_store(state: IndexingState):
     # vector_txt = text_embeddings.embed_documents(state['chunks_txt'])
     # vector_word = word_embeddings.embed_documents(state['chunks_word'])
 
-    client = QdrantClient(
-    host="localhost",
-    port=6333 )
+    # client = QdrantClient(
+    # host="localhost",
+    # port=6333 )
+
+    #qdrant_url=https://75c65124-da23-4420-a762-a72402c69c1d.australia-southeast1-0.gcp.cloud.qdrant.io
+    qdrant_api_key=os.getenv('QDRANT_CLOUD_API_KEY')
+    qdrant_url=os.getenv("QDRANT_URL")
+
+
     
     vector_store_word = QdrantVectorStore.from_documents(
     documents=state["chunks_word"],
     embedding=word_embeddings,
     collection_name="rag_collection_word",
-    url='http://localhost:6333/'
+    url=qdrant_url, api_key=qdrant_api_key
     )
     
     print(f'Successfully created embedding for word documents and vector store is created under "rag_collection_word"')
@@ -158,7 +188,7 @@ def node_db_connection_vectore_store(state: IndexingState):
     documents=state["chunks_pdf"],
     embedding=pdf_embeddings,
     collection_name="rag_collection_pdf",
-    url='http://localhost:6333/'
+    url=qdrant_url, api_key=qdrant_api_key
     )
     print(f'Successfully created embedding for pdf documents and vector store is created under "rag_collection_pdf"')
 
@@ -167,7 +197,7 @@ def node_db_connection_vectore_store(state: IndexingState):
     documents=state["chunks_csv"],
     embedding=csv_embeddings,
     collection_name="rag_collection_csv",
-    url='http://localhost:6333/'
+    url=qdrant_url, api_key=qdrant_api_key
     )
     print(f'Successfully created embedding for wcsv documents and vector store is created under "rag_collection_csv"')
 
@@ -175,7 +205,7 @@ def node_db_connection_vectore_store(state: IndexingState):
     documents=state["chunks_txt"],
     embedding=text_embeddings,
     collection_name="rag_collection_txt",
-    url='http://localhost:6333/'
+    url=qdrant_url, api_key=qdrant_api_key
     )
     print(f'Successfully created embedding for text documents and vector store is created under "rag_collection_txt"')
 
@@ -205,7 +235,7 @@ def builer(root_folder):
     graph = load_builder.compile() 
 
     final_state = graph.invoke({
-        "path": root_folder
+        "bucket_name": root_folder
     })
 
     return {
@@ -217,3 +247,89 @@ def builer(root_folder):
      
      
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+''' --------------OLD CODE--------------------------
+
+def node_load_file(state: IndexingState):
+    temp_categorized_files = state["category_file"]
+
+    pdf_load_doc = []
+    csv_load_doc = []
+    text_load_doc = []
+    word_load_doc = []
+
+    for category, files in temp_categorized_files.items():
+        
+        if category == 'PDF':
+            for file in files:
+                    docs = GCS_loader(file, category)
+                    # pdf_loader =  PyPDFLoader(file,mode='page')
+                    # pdf_load = pdf_loader.load()
+                    # raw = data_source.read(file)
+                    # pdf = fitz.open(stream=raw, filetype="pdf")
+                    
+                    pdf_load_doc.extend(docs)
+            print(f'Number of PDF documents loaded --> {len(pdf_load_doc)}')
+
+        if category == 'CSV':
+            for file in files:
+                  docs = GCS_loader(file, category)
+                #   csv_loader = CSVLoader(file)
+                #   csv_load = csv_loader.load()
+                #   raw = data_source.read(file)
+                #   reader = csv.DictReader(io.StringIO(raw.decode("utf-8")))
+                #   # Text
+                #   text = raw.decode("utf-8")
+                  csv_load_doc.extend(docs)
+            print(f'Number of CSV documents loaded --> {len(csv_load_doc)}')
+
+        if category == 'Text':
+            for file in files:
+                docs = GCS_loader(file, category)
+                #   text_loader = TextLoader(file)
+                #   text_load = text_loader.load()
+                text_load_doc.extend(docs)
+            print(f'Number of Text documents loaded --> {len(text_load_doc)}')
+
+
+        if category == 'Word':
+            for file in files:
+                docs = GCS_loader(file, category)
+                # loader = GCSFileLoader.load(project_name=project_id,
+                #             bucket=bucket_name,
+                #             blob=file,
+                #             loader_func=LOADER_MAP[category] )
+                # word_loader = Docx2txtLoader(file)
+                # word_load = word_loader.load()
+                word_load_doc.extend(docs)
+            print(f'Number of Word documents loaded --> {len(word_load_doc)}')  
+    return {
+        "load_doc_status" : "Yes",
+        'load_word_doc': word_load_doc,
+        "load_pdf_status" : "Yes",
+        'load_pdf_doc' : pdf_load_doc,
+        "load_csv_status" : "Yes",
+        'load_csv_doc' : csv_load_doc,
+        "load_txt_status" : "Yes",
+        'load_txt_doc' : text_load_doc,
+        'load_files' : "Yes"   
+            }        
+'''
