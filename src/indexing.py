@@ -120,7 +120,7 @@ def node_load_file(state: IndexingState):
             }        
 
 def GCS_loader(file, category, ):
-     loader = GCSFileLoader.load(project_name=project_id,
+     loader = GCSFileLoader(project_name=project_id,
                             bucket=bucket_name,
                             blob=file,
                             loader_func=LOADER_MAP[category] )
