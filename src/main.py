@@ -10,9 +10,16 @@ ROOT_FOLDER = os.environ.get("GCS_BUCKET_NAME")
 # /* provide the google cloud bucket name and pass it to root folder */
 
 app =  FastAPI()
-@app.get("/")
+@app.get("/health")          # ← Cloud Run startup probe points here
+def health():
+    return {"status": "ok"}  
+
+
+@app.get("/index")
 def indexing():
+    print("GCP Bucket name" , ROOT_FOLDER)
     indexing_status = builer(ROOT_FOLDER)
+    print("GCP Bucket name" , ROOT_FOLDER)
     return {
         "Indexing_status" : indexing_status
     }
