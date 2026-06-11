@@ -53,9 +53,9 @@ class DataSource():
             blob_name = blob.name
             for category, extension in self.FILE_CATEGORIES.items():
                 if ext in extension:
-                    self.categorized_file[category].append(blob_name)
+                    self.categorized_files[category].append(blob_name)
             else:
-                self.categorized_file["Others"].append(blob_name)
+                self.categorized_files["Others"].append(blob_name)
 # Manual download from GCP & parse
     # def read_blob(self,blob_name: str):
         
