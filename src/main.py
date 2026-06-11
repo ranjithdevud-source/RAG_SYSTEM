@@ -14,6 +14,10 @@ app =  FastAPI()
 def health():
     return {"status": "ok"}  
 
+@app.get("/")          # ← Cloud Run startup probe points here
+def health():
+    return {"status_root": "ok"}  
+
 
 @app.get("/index")
 def indexing():
